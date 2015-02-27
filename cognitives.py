@@ -18,6 +18,10 @@ import threading
 from pygame.locals import *
 import moosegesture
 
+# for swipe lock
+import Xlib
+import Xlib.display
+
 
 class Cognitives:
     X = 854
@@ -48,7 +52,7 @@ class Cognitives:
     BOD_PORT = 65001    # bod data
 
     # test variables
-    TOTAL_TRIAL = 50
+    TOTAL_TRIAL = 1
     COUNTDOWN = 2      # secs
     MAX_DISPLAY_TIME = 1   # secs
     TIME_REDUCTION_FACTOR = 0.5 * MAX_DISPLAY_TIME
@@ -87,11 +91,8 @@ class Cognitives:
         self.correct = 0
         self.incorrect = 0
 
-        # end of test
-        self.theend = False
-
         # SART flag
-        self.sart_start= False
+        self.sart_start = False
 
         # display time
         self.display_time = 0.0
@@ -105,15 +106,37 @@ class Cognitives:
             os.mkdir(Cognitives.DATA_DIR)
 
         # create and open log file
-        self.log_file = '%s/test_data_%s.csv' % (Cognitives.DATA_DIR, self.test_type)
+        self.log_file = '%s/testdata_%s.csv' % (Cognitives.DATA_DIR, self.test_type)
         self.f = open(self.log_file, 'w')
 
-    # @staticmethod
-    # def draw_text(surf, text, xpos, ypos, colour, size):
-    #     labelfont = pygame.font.SysFont("Arial", size)
-    #     label = labelfont.render(text, True, colour)
-    #     rotatedlabel = pygame.transform.rotate(label, 90)
-    #     surf.blit(rotatedlabel, (xpos, ypos))
+        # get display and window properties for swipe locking
+        self.display = Xlib.display.Display()
+        self.window = self.display.create_resource_object('window', pygame.display.get_wm_info()['window'])
+        self.fswindow = self.display.create_resource_object('window', pygame.display.get_wm_info()['fswindow'])
+        self.wmwindow = self.display.create_resource_object('window', pygame.display.get_wm_info()['wmwindow'])
+
+        # as per Harmattan documentation (create custom region locking)
+        self.customRegionAtom = self.display.intern_atom("_MEEGOTOUCH_CUSTOM_REGION")
+
+    def swipelock(self, locked):
+
+        if locked:
+            width = Cognitives.X
+            height = Cognitives.Y
+        else:
+            width = 0
+            height = 0
+
+        # region rectangle
+        customRegion = [0, 0, width, height]
+
+        #python-xlib Window change_property ( property, type, format, data, mode = X.PropModeReplace, onerror = None )
+        self.window.change_property(self.customRegionAtom, 6, 32, customRegion)
+        self.fswindow.change_property(self.customRegionAtom, 6, 32, customRegion)
+        self.wmwindow.change_property(self.customRegionAtom, 6, 32, customRegion)
+
+        # update X server
+        self.display.sync()
 
     def init_flanker(self):
         pos = (400, 20)
@@ -138,8 +161,6 @@ class Cognitives:
     def change_sart_stimulus(self):
         direction = 1
         self.sart_start = False
-        #nonzero = False
-        #specific = False
 
         # 1 = non-zero; 2 = specific;
         stimulus_type = random.randint(1, 2)
@@ -157,7 +178,7 @@ class Cognitives:
         pos = random.randint(1, 6)
 
         if stimulus_type == 1:
-            self.draw_notification('Find non-zero number', Cognitives.BLACK, 40)
+            self.draw_notification('Find non-zero number', Cognitives.BLACK, 45)
             time.sleep(1)
 
             # clear display
@@ -184,7 +205,7 @@ class Cognitives:
                 self.draw_text('000000', Cognitives.BLACK, 80)
 
         elif stimulus_type == 2:
-            self.draw_notification('Find number %d' % number, Cognitives.BLACK, 40)
+            self.draw_notification('Find number %d' % number, Cognitives.BLACK, 50)
             time.sleep(1)
 
             # clear display
@@ -206,7 +227,7 @@ class Cognitives:
 
             if specific:
                 direction = 1
-                print 'Specific'
+                #print 'Specific'
                 if pos == 1:
                     self.draw_text('%d%d%d%d%d%d' % (number, series[0], series[1], series[2], series[3], series[4]), Cognitives.BLACK, 80)
                 elif pos == 2:
@@ -221,7 +242,7 @@ class Cognitives:
                     self.draw_text('%d%d%d%d%d%d' % (series[0], series[1], series[2], series[3], series[4], number), Cognitives.BLACK, 80)
             else:
                 direction = 2
-                print 'Non-specific'
+                #print 'Non-specific'
                 self.draw_text('%d%d%d%d%d%d' % (series[0], series[1], series[2], series[3], series[4], series[5]), Cognitives.BLACK, 80)
 
         self.sart_start = True
@@ -403,14 +424,6 @@ class Cognitives:
             self.draw_flanker_arrow(self.screen, cross_img, (pos[0], pos[1] + 270))
             self.draw_flanker_arrow(self.screen, cross_img, (pos[0], pos[1] + 360))
 
-        # trial counter
-        # counter_font = pygame.font.SysFont("Arial", 20)
-        # counter_label = counter_font.render('%d/%d' % (self.counter, Flanker.TOTAL_TRIAL), True, Flanker.TEXT_COL)
-        # counter_label = pygame.transform.rotate(counter_label, 90)
-        # counter_label_rect = counter_label.get_rect()
-        # counter_label_rect.topleft = (0, 0 + 10)
-        # self.screen.blit(counter_label, counter_label_rect)
-
         pygame.display.flip()
 
         return stimulus_type, direction
@@ -485,6 +498,9 @@ class Cognitives:
 
         time.sleep(2)
 
+        # re-enable N9 screen swipe
+        self.swipelock(False)
+
         pygame.quit()
         sys.exit()
 
@@ -515,10 +531,11 @@ class Cognitives:
         pygame.display.flip()
         time.sleep(1)
 
-        if self.counter == Cognitives.TOTAL_TRIAL:
-            self.theend = True
-        else:
-            self.theend = False
+        # if self.counter == Cognitives.TOTAL_TRIAL and self.stimulus_type != 3:
+        #     self.theend = True
+        # else:
+        #     self.theend = False
+
 
     @staticmethod
     def aspect_scale(img, (bx, by)):
@@ -572,7 +589,9 @@ class Cognitives:
 
             perf_data = [self.display_time, self.error_rate]
 
-            self.writer(event_data, perf_data,  xyz_data, cap_data)
+            # just to make sure not to write after the test ends
+            if self.counter <= Cognitives.TOTAL_TRIAL:
+                self.writer(event_data, perf_data, xyz_data, cap_data)
 
             # sampling at 100Hz
             time.sleep(0.01)
@@ -614,6 +633,7 @@ class Cognitives:
 
         points = []
         strokes = []
+        new_trial = True
         mouse_down = False
         next_stimulus = False
         show_stimulus = False
@@ -626,6 +646,9 @@ class Cognitives:
 
         # sensor thread
         self.run_read_sensor()
+
+        # disable N9 screen swipe
+        self.swipelock(True)
 
         while True:
             # check for events
@@ -677,8 +700,22 @@ class Cognitives:
                     # draw the line if the mouse is dragging
                     points.append((event.pos[0], event.pos[1]))
 
-            if show_start_screen and not self.theend:
+            if show_start_screen:
                 self.event_type = 1
+
+                if new_trial:
+                    self.counter += 1
+
+                    if self.counter >= 10:
+                        self.display_time = self.compute_time(self.error_rate)
+
+                    # compute error rate
+                    self.error_rate = self.incorrect/self.counter
+
+                    if self.counter <= Cognitives.TOTAL_TRIAL:
+                        print 'trial #%d #correct = %d #incorrect = %d error rate = %.4f display time = %.4f' % (self.counter, self.correct, self.incorrect, self.error_rate, self.display_time)
+
+                    new_trial = False
 
                 start_button = self.draw_start_screen()
 
@@ -701,13 +738,6 @@ class Cognitives:
                     self.draw_test_countdown(elapsed)
 
             if next_stimulus:
-                if self.counter == 0:
-                    pass
-                else:
-                    self.error_rate = self.incorrect/self.counter
-                    self.display_time = self.compute_time(self.error_rate)
-                    print '#trial = %d correct = %d incorrect = %d error rate = %.4f display time = %.4f' % (self.counter, self.correct, self.incorrect, self.error_rate, self.display_time)
-
                 # test type
                 if self.test_type == 1:
                     self.stimulus_type, direction = self.change_flanker_stimulus(arrow_img, box_img, cross_img, pos)
@@ -716,9 +746,6 @@ class Cognitives:
 
                     # start timer
                     start_time = time.time()
-
-                    # trial counter
-                    self.counter += 1
 
                     next_stimulus = False
                     show_stimulus = True
@@ -730,9 +757,6 @@ class Cognitives:
 
                     # start timer
                     start_time = time.time()
-
-                    # trial counter
-                    self.counter += 1
 
                     next_stimulus = False
                     show_stimulus = True
@@ -746,15 +770,13 @@ class Cognitives:
                         # start timer
                         start_time = time.time()
 
-                        # trial counter
-                        self.counter += 1
-
                         next_stimulus = False
                         show_stimulus = True
 
             if show_stimulus:
                 elapsed = time.time() - start_time
 
+                # no-go
                 if mouse_down and self.stimulus_type == 3:
                     self.event_type = 5
                     self.draw_notification('Incorrect', (0, 0, 0), 60)
@@ -763,9 +785,10 @@ class Cognitives:
 
                     show_stimulus = False
                     show_start_screen = True
+                    new_trial = True
 
-                # no-go
-                if elapsed > self.display_time and self.stimulus_type == 3 and not mouse_down:
+                # no-go (response held)
+                if elapsed > self.display_time and self.stimulus_type == 3:
                     self.event_type = 5
                     self.draw_notification('Correct', (0, 0, 0), 60)
                     self.result = 1
@@ -773,9 +796,10 @@ class Cognitives:
 
                     show_stimulus = False
                     show_start_screen = True
+                    new_trial = True
 
                 # incongrent/congruent
-                if elapsed > self.display_time and self.stimulus_type != 3 and not mouse_down:
+                if elapsed > self.display_time and self.stimulus_type != 3:
                     self.event_type = 5
                     self.draw_notification('Too slow. Try faster.', (0, 0, 0), 50)
                     self.result = -1
@@ -783,6 +807,7 @@ class Cognitives:
 
                     show_stimulus = False
                     show_start_screen = True
+                    new_trial = True
 
                 elif elapsed <= self.display_time and strokes:
                     self.event_type = 5
@@ -793,8 +818,9 @@ class Cognitives:
 
                     show_stimulus = False
                     show_start_screen = True
+                    new_trial = True
 
-            if self.theend:
+            if self.counter > Cognitives.TOTAL_TRIAL:
                 self.draw_exit_screen()
 
             main_clock.tick(Cognitives.FPS)

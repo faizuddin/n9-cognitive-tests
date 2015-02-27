@@ -83,7 +83,7 @@ from sys import maxsize
 
 # This is the minimum distance the mouse must travel (in pixels) before a
 # segment will be considered for stroke interpretation.
-_MIN_SEG_LEN = 60
+_MIN_SEG_LEN = 30
 
 # The integers-to-directions mapping matches the keypad:
 #   7 8 9

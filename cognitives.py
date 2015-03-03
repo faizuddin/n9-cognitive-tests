@@ -45,6 +45,7 @@ class Cognitives:
     # sensor files
     ACCEL_FILE = "/sys/devices/platform/lis3lv02d/position"
     EXTCAP_FILE = "/dev/extcap"
+    SAMPLE_RATE = 0.02
 
     # TCP/IP variables
     HOST = "192.168.2.14"
@@ -52,7 +53,7 @@ class Cognitives:
     BOD_PORT = 65001    # bod data
 
     # test variables
-    TOTAL_TRIAL = 1
+    TOTAL_TRIAL = 50
     COUNTDOWN = 2      # secs
     MAX_DISPLAY_TIME = 1   # secs
     TIME_REDUCTION_FACTOR = 0.5 * MAX_DISPLAY_TIME
@@ -106,7 +107,7 @@ class Cognitives:
             os.mkdir(Cognitives.DATA_DIR)
 
         # create and open log file
-        self.log_file = '%s/testdata_%s.csv' % (Cognitives.DATA_DIR, self.test_type)
+        self.log_file = '%s/faiz_testdata1_%s.csv' % (Cognitives.DATA_DIR, self.test_type)
         self.f = open(self.log_file, 'w')
 
         # get display and window properties for swipe locking
@@ -260,7 +261,7 @@ class Cognitives:
         # pick random colour
         colour = random.randint(1, len(colour_strings))
 
-        # 1 = congruent; 2 = incongruent; 4 = no-go
+        # 1 = congruent; 2 = incongruent; 3 = no-go
         stimulus_type = random.randint(1, 3)
 
         # clear display
@@ -417,12 +418,12 @@ class Cognitives:
 
             pygame.display.flip()
 
-        elif stimulus_type == 4:
-            self.draw_flanker_arrow(self.screen, cross_img, pos)
-            self.draw_flanker_arrow(self.screen, cross_img, (pos[0], pos[1] + 90))
-            self.draw_flanker_arrow(self.screen, arrow_img, (pos[0], pos[1] + 180))
-            self.draw_flanker_arrow(self.screen, cross_img, (pos[0], pos[1] + 270))
-            self.draw_flanker_arrow(self.screen, cross_img, (pos[0], pos[1] + 360))
+        # elif stimulus_type == 4:
+        #     self.draw_flanker_arrow(self.screen, cross_img, pos)
+        #     self.draw_flanker_arrow(self.screen, cross_img, (pos[0], pos[1] + 90))
+        #     self.draw_flanker_arrow(self.screen, arrow_img, (pos[0], pos[1] + 180))
+        #     self.draw_flanker_arrow(self.screen, cross_img, (pos[0], pos[1] + 270))
+        #     self.draw_flanker_arrow(self.screen, cross_img, (pos[0], pos[1] + 360))
 
         pygame.display.flip()
 
@@ -593,8 +594,8 @@ class Cognitives:
             if self.counter <= Cognitives.TOTAL_TRIAL:
                 self.writer(event_data, perf_data, xyz_data, cap_data)
 
-            # sampling at 100Hz
-            time.sleep(0.01)
+            # sample rate
+            time.sleep(Cognitives.SAMPLE_RATE)
 
     def writer(self, event_data, perf_data, accel_data, cap_data):
         towrite = []
